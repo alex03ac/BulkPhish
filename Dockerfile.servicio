@@ -1,0 +1,18 @@
+# Imagen para cualquiera de los servicios Go. Se elige con --build-arg SERVICIO=<nombre>.
+# Etapa 1: compilar. Etapa 2: imagen mínima solo con el binario, sin privilegios de root.
+FROM golang:1.22-alpine AS compilador
+ARG SERVICIO
+WORKDIR /src
+COPY go.mod ./
+COPY cmd ./cmd
+COPY internal ./internal
+# go mod tidy descarga las dependencias y genera go.sum (verificación de integridad).
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    go mod tidy && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /salida/servicio ./cmd/${SERVICIO}
+
+FROM alpine:3.20
+RUN adduser -D -u 10001 aplicacion
+USER aplicacion
+COPY --from=compilador /salida/servicio /usr/local/bin/servicio
+ENTRYPOINT ["/usr/local/bin/servicio"]

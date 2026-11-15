@@ -1,0 +1,19 @@
+# Secretos: NUNCA se suben
+.env
+.env.*
+!.env.ejemplo
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+credenciales*
+
+# Generado
+node_modules/
+frontend/dist/
+*.log
+*.zip
+.DS_Store
+.idea/
+.vscode/

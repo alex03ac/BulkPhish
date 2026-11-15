@@ -1,0 +1,173 @@
+# BulkPhish: todo el sistema con un solo comando → docker compose up --build
+#
+# SEGURO POR DEFECTO: este archivo NO contiene contraseñas ni claves. Todas se leen del archivo
+# ".env" (que nunca se sube a Git). Si falta alguna, Compose se detiene con un mensaje claro.
+# Primer paso: ./scripts/generar-env.sh   (Windows: .\scripts\generar-env.ps1)
+name: bulkphish
+
+# Endurecimiento común a los servicios Go: sistema de archivos de solo lectura, sin capacidades
+# de Linux, sin posibilidad de ganar privilegios y con límites de memoria y de procesos.
+x-servicio-go: &servicio-go
+  restart: unless-stopped
+  networks: [interna]
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  mem_limit: 256m
+  pids_limit: 256
+
+services:
+  # ------------------------------------------------------------------ Entrada
+  gateway:
+    image: nginxinc/nginx-unprivileged:1.27-alpine      # NGINX sin root
+    # Por defecto solo accesible desde tu propia máquina. Para abrirlo a tu red: BIND_GATEWAY=0.0.0.0 en .env
+    ports: ["${BIND_GATEWAY:-127.0.0.1}:8080:8080"]
+    volumes: ["./gateway/nginx.conf:/etc/nginx/nginx.conf:ro"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 256
+    depends_on:
+      frontend: { condition: service_started }
+      autenticacion: { condition: service_healthy }
+      campanas: { condition: service_healthy }
+      resultados: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/estado"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [publica, interna]
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+    pids_limit: 128
+    networks: [interna]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------ Servicios Go
+  autenticacion:
+    <<: *servicio-go
+    build: { context: ., dockerfile: Dockerfile.servicio, args: { SERVICIO: autenticacion } }
+    environment:
+      PUERTO: "8081"
+      BD_URL: postgres://rol_autenticacion:${CLAVE_BD_AUTENTICACION:?Falta CLAVE_BD_AUTENTICACION. Ejecuta scripts/generar-env.sh}@postgres:5432/bulkphish
+      JWT_SECRETO: ${JWT_SECRETO:?Falta JWT_SECRETO. Ejecuta scripts/generar-env.sh}
+      JWT_HORAS: "8"
+      LOGIN_MAX_FALLOS: "5"
+      LOGIN_VENTANA_MIN: "15"
+      ADMIN_CORREO: ${ADMIN_CORREO:?Falta ADMIN_CORREO. Ejecuta scripts/generar-env.sh}
+      ADMIN_CLAVE: ${ADMIN_CLAVE:?Falta ADMIN_CLAVE. Ejecuta scripts/generar-env.sh}
+      ADMIN_NOMBRE: ${ADMIN_NOMBRE:-Administrador de Seguridad}
+    depends_on: { postgres: { condition: service_healthy } }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/salud"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  campanas:
+    <<: *servicio-go
+    build: { context: ., dockerfile: Dockerfile.servicio, args: { SERVICIO: campanas } }
+    environment:
+      PUERTO: "8082"
+      BD_URL: postgres://rol_campanas:${CLAVE_BD_CAMPANAS:?Falta CLAVE_BD_CAMPANAS. Ejecuta scripts/generar-env.sh}@postgres:5432/bulkphish
+      AMQP_URL: amqp://${RABBIT_USUARIO:?Falta RABBIT_USUARIO}:${RABBIT_CLAVE:?Falta RABBIT_CLAVE. Ejecuta scripts/generar-env.sh}@rabbitmq:5672/
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/salud"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  resultados:
+    <<: *servicio-go
+    build: { context: ., dockerfile: Dockerfile.servicio, args: { SERVICIO: resultados } }
+    environment:
+      PUERTO: "8083"
+      BD_URL: postgres://rol_resultados:${CLAVE_BD_RESULTADOS:?Falta CLAVE_BD_RESULTADOS. Ejecuta scripts/generar-env.sh}@postgres:5432/bulkphish
+      AMQP_URL: amqp://${RABBIT_USUARIO:?Falta RABBIT_USUARIO}:${RABBIT_CLAVE:?Falta RABBIT_CLAVE. Ejecuta scripts/generar-env.sh}@rabbitmq:5672/
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8083/salud"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  correos:
+    <<: *servicio-go
+    build: { context: ., dockerfile: Dockerfile.servicio, args: { SERVICIO: correos } }
+    environment:
+      AMQP_URL: amqp://${RABBIT_USUARIO:?Falta RABBIT_USUARIO}:${RABBIT_CLAVE:?Falta RABBIT_CLAVE. Ejecuta scripts/generar-env.sh}@rabbitmq:5672/
+      SMTP_HOST: mailpit
+      SMTP_PUERTO: "1025"
+      URL_PUBLICA: ${URL_PUBLICA:-http://localhost:8080}
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+      mailpit: { condition: service_started }
+
+  # ------------------------------------------------------------- Infraestructura
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${CLAVE_BD_ADMIN:?Falta CLAVE_BD_ADMIN. Ejecuta scripts/generar-env.sh}
+      POSTGRES_DB: bulkphish
+      CLAVE_BD_AUTENTICACION: ${CLAVE_BD_AUTENTICACION:?Falta CLAVE_BD_AUTENTICACION}
+      CLAVE_BD_CAMPANAS: ${CLAVE_BD_CAMPANAS:?Falta CLAVE_BD_CAMPANAS}
+      CLAVE_BD_RESULTADOS: ${CLAVE_BD_RESULTADOS:?Falta CLAVE_BD_RESULTADOS}
+    volumes:
+      - datos_postgres:/var/lib/postgresql/data
+      - ./bd/inicializar.sh:/docker-entrypoint-initdb.d/01_inicializar.sh:ro
+      - ./bd/esquemas:/esquemas:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bulkphish"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    security_opt: ["no-new-privileges:true"]
+    networks: [interna]                         # sin ningún puerto publicado
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USUARIO:?Falta RABBIT_USUARIO}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_CLAVE:?Falta RABBIT_CLAVE. Ejecuta scripts/generar-env.sh}
+    ports: ["127.0.0.1:15672:15672"]           # panel de administración: solo desde tu máquina
+    volumes: [datos_rabbitmq:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    security_opt: ["no-new-privileges:true"]
+    networks: [publica, interna]
+    restart: unless-stopped
+
+  mailpit:                                      # buzón de pruebas: ningún correo sale a Internet
+    image: axllent/mailpit:v1.20
+    ports: ["127.0.0.1:8025:8025"]             # bandeja web: solo desde tu máquina (contiene los tokens)
+    security_opt: ["no-new-privileges:true"]
+    networks: [publica, interna]
+    restart: unless-stopped
+
+networks:
+  publica: {}                                   # accesible desde tu máquina
+  interna: { internal: true }                   # solo entre contenedores; sin salida a Internet
+
+volumes:
+  datos_postgres: {}
+  datos_rabbitmq: {}

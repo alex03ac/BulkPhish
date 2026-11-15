@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BulkPhish · Arquitectura interactiva</title>
+<style>
+:root{--tinta:#0e2a3b;--papel:#f3f6f8;--linea:#dce3e8;--texto:#14222e;--suave:#52656f;--accion:#0b6b86;--accion-f:#e3f1f5;--clic:#d64550;--ok:#1c9a74;--aviso:#b7791f;--aviso-f:#fbf1dc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--papel);color:var(--texto);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+header{background:var(--tinta);color:#fff;padding:22px 32px}
+header h1{margin:0;font-size:24px;letter-spacing:-.01em}
+header p{margin:4px 0 0;color:#a9c0cf;max-width:80ch}
+main{max-width:1280px;margin:0 auto;padding:24px 20px 60px}
+.cuadricula{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:20px;align-items:start}
+.tarjeta{background:#fff;border:1px solid var(--linea);border-radius:10px;padding:18px}
+.conmutador{display:inline-flex;background:#e6ecf0;border-radius:9px;padding:3px;margin-bottom:14px}
+.conmutador button{border:0;background:none;padding:8px 16px;border-radius:7px;font:inherit;font-weight:600;color:var(--suave);cursor:pointer}
+.conmutador button[aria-pressed=true]{background:#fff;color:var(--tinta);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+button:focus-visible,g[tabindex]:focus-visible{outline:3px solid #5bb4cc;outline-offset:2px}
+svg{width:100%;height:auto;display:block}
+.nodo rect.caja{fill:#fff;stroke:#b8c6d0;stroke-width:1.5;transition:all .2s}
+.nodo{cursor:pointer}
+.nodo .t{font-weight:700;font-size:14px;fill:var(--tinta)}
+.nodo .s{font-size:11.5px;fill:var(--suave)}
+.nodo:hover rect.caja{stroke:var(--accion)}
+.nodo.sel rect.caja{stroke:var(--accion);stroke-width:3;fill:var(--accion-f)}
+.nodo.act rect.caja{stroke:var(--clic);stroke-width:3;fill:#fdf0f1}
+.nodo.pasivo{opacity:.35}
+.go rect.caja{fill:#e9f7fa}.mq rect.caja{fill:#fff3e6}.bd rect.caja{fill:#eef2fb}.ext rect.caja{fill:#f4f4f4}
+.chip{fill:#fff;stroke:#9fb0c9;stroke-width:1.2}.chipt{font-size:11.5px;fill:#32456b;font-weight:600}
+.arista{stroke:#9db0be;stroke-width:2;fill:none}
+.arista.bd{stroke-dasharray:5 4;stroke:#b7c3e0}
+.arista.act{stroke:var(--clic);stroke-width:3.2}
+.arista.pasivo{opacity:.25}
+.etq{font-size:11px;fill:var(--suave)}
+.etq.act{fill:var(--clic);font-weight:700}
+.leyenda{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--suave);margin-top:8px}
+.leyenda i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px;border:1px solid #b8c6d0}
+h2{font-size:18px;margin:0 0 10px}
+h3{font-size:15px;margin:16px 0 6px}
+.panel dl{margin:0;display:grid;grid-template-columns:110px 1fr;gap:8px 12px;font-size:14px}
+.panel dt{color:var(--suave);font-weight:600}.panel dd{margin:0}
+code{background:#eef2f5;padding:1px 6px;border-radius:5px;font-size:13px}
+.etiqueta{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:700}
+.sync{background:var(--accion-f);color:#0a4a5f}.async{background:var(--aviso-f);color:#86570f}
+.controles{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
+.btn{border:1px solid #b8c6d0;background:#fff;border-radius:8px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+.btn.p{background:var(--accion);border-color:var(--accion);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.progreso{display:flex;gap:5px;margin:10px 0 14px}
+.progreso i{flex:1;height:6px;border-radius:9px;background:#dfe7ec;cursor:pointer}
+.progreso i.hecho{background:var(--accion)}.progreso i.ahora{background:var(--clic)}
+.lista-pasos{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+.lista-pasos button{width:100%;text-align:left;border:1px solid transparent;background:none;border-radius:8px;padding:7px 10px;font:inherit;cursor:pointer;color:var(--suave)}
+.lista-pasos button[aria-current=step]{background:var(--accion-f);border-color:#bcdde7;color:var(--texto);font-weight:600}
+.msj{background:#fdf0f1;border:1px solid #f1c3c7;border-radius:8px;padding:8px 12px;margin-top:10px;font-size:13px}
+.msj code{background:#fff}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;color:var(--suave);font-size:13px;padding:0 10px 8px;border-bottom:1px solid var(--linea)}
+td{padding:9px 10px;border-bottom:1px solid #edf1f4;vertical-align:top}
+tr:last-child td{border:0}
+.seccion{margin-top:20px}
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+ul.simple{margin:0;padding-left:20px;display:grid;gap:6px}
+@media(max-width:980px){.cuadricula,.dos{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>BulkPhish · Arquitectura interactiva</h1>
+  <p>Plataforma de simulacros de phishing sobre una arquitectura distribuida y orientada a eventos. Haz clic en cualquier componente o recorre el flujo paso a paso.</p>
+</header>
+<main>
+<div class="cuadricula">
+  <section class="tarjeta" aria-label="Diagrama de arquitectura">
+    <div class="conmutador" role="group" aria-label="Modo de vista">
+      <button type="button" id="modo-comp" aria-pressed="true">Componentes</button>
+      <button type="button" id="modo-flujo" aria-pressed="false">Flujo del simulacro</button>
+    </div>
+    <svg viewBox="0 0 940 640" role="img" aria-label="Diagrama: navegador, gateway NGINX, servicios Go, RabbitMQ y PostgreSQL" id="diagrama">
+      <defs><marker id="flecha" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker></defs>
+      <g id="aristas"></g>
+      <g id="nodos"></g>
+    </svg>
+    <div class="leyenda" aria-hidden="true">
+      <span><i style="background:#e9f7fa"></i>Servicio en Go</span><span><i style="background:#fff3e6"></i>Bus de eventos</span><span><i style="background:#eef2fb"></i>Base de datos</span><span><i style="background:#fff"></i>Otros</span>
+      <span>Línea sólida = llamada o evento · punteada = acceso a datos</span>
+    </div>
+  </section>
+
+  <aside class="tarjeta panel" id="panel" aria-live="polite"></aside>
+</div>
+
+<section class="tarjeta seccion">
+  <h2>Eventos del sistema</h2>
+  <p style="color:var(--suave);margin:0 0 12px">Son el único contrato entre servicios. Ningún servicio conoce el código ni la base de datos de otro.</p>
+  <div style="overflow-x:auto"><table>
+    <thead><tr><th>Evento (clave)</th><th>Lo publica</th><th>Lo consumen</th><th>Qué contiene</th></tr></thead>
+    <tbody>
+      <tr><td><code>campana.creada</code></td><td>campanas (vía bandeja de salida)</td><td>correos, resultados</td><td>Campaña, plantilla y la lista de destinatarios con su token</td></tr>
+      <tr><td><code>correo.enviado</code></td><td>correos</td><td>resultados</td><td>Qué destinatario recibió su correo y cuándo</td></tr>
+      <tr><td><code>enlace.clicado</code></td><td>campanas (vía bandeja de salida)</td><td>resultados</td><td>Quién hizo clic y cuándo</td></tr>
+      <tr><td><code>correo.reportado</code></td><td>campanas (vía bandeja de salida)</td><td>resultados</td><td>Quién reportó el correo y cuándo</td></tr>
+    </tbody></table></div>
+</section>
+
+<div class="dos seccion">
+  <section class="tarjeta">
+    <h2>Síncrono vs. asíncrono</h2>
+    <p><span class="etiqueta sync">Síncrono</span> El administrador espera la respuesta: iniciar sesión, validar el token, crear la campaña (se guarda y se responde <code>201</code> al instante).</p>
+    <p><span class="etiqueta async">Asíncrono</span> Nadie espera: enviar los correos, calcular resultados. Ocurre en segundo plano porque la campaña publica un evento y otros servicios reaccionan.</p>
+    <p style="color:var(--suave)">Por eso el panel puede mostrar “Preparando…” unos segundos: los resultados son <strong>eventualmente consistentes</strong>.</p>
+  </section>
+  <section class="tarjeta">
+    <h2>Qué pasa si algo falla</h2>
+    <ul class="simple">
+      <li><strong>RabbitMQ se cae al crear una campaña:</strong> la campaña ya está guardada con su evento en la bandeja de salida; se publica cuando RabbitMQ vuelve (patrón <em>outbox</em>).</li>
+      <li><strong>Un consumidor falla procesando:</strong> se reintenta 3 veces; si sigue fallando, el mensaje va a la cola de mensajes muertos para revisarlo.</li>
+      <li><strong>Llega el mismo evento dos veces:</strong> no pasa nada; resultados solo registra la primera (idempotencia).</li>
+      <li><strong>El servicio de resultados está caído:</strong> los eventos esperan en su cola y se procesan al volver.</li>
+    </ul>
+  </section>
+</div>
+
+<section class="tarjeta seccion">
+  <h2>Seguridad por capas</h2>
+  <ul class="simple">
+    <li><strong>Sin secretos en el repositorio:</strong> todas las claves se generan al azar en un archivo <code>.env</code> que Git ignora. Si falta alguna, el sistema no arranca.</li>
+    <li><strong>Una sola entrada:</strong> solo el gateway sirve la aplicación; los servicios viven en una red Docker interna sin salida a Internet y los paneles auxiliares solo escuchan en tu máquina.</li>
+    <li><strong>JWT validado en el borde:</strong> NGINX pregunta a <code>autenticacion</code> antes de dejar pasar cualquier ruta protegida y reemplaza la cabecera <code>X-Usuario</code> (no se puede falsificar).</li>
+    <li><strong>Anti fuerza bruta:</strong> límite de peticiones en NGINX y bloqueo temporal tras 5 intentos de login fallidos.</li>
+    <li><strong>Enlaces del correo:</strong> token aleatorio de 128 bits que solo registra clic o reporte; no aparece en los logs y no viaja a otros sitios (<code>Referrer-Policy</code>).</li>
+    <li><strong>Datos separados:</strong> un esquema y un rol de base de datos por servicio. Contraseñas con bcrypt.</li>
+    <li><strong>Contenedores mínimos:</strong> sin root, sistema de archivos de solo lectura y sin capacidades de Linux. Los correos solo van a un buzón de pruebas.</li>
+  </ul>
+</section>
+</main>
+
+<script>
+"use strict";
+/* ---------------- Datos del diagrama ---------------- */
+const NODOS = {
+  navegador:{x:330,y:10,w:280,h:52,t:"Navegador",s:"Administrador y empleados",tipo:"ext",
+    que:"Quien usa el sistema. El administrador entra al panel; el empleado solo abre el enlace de su correo.",
+    tec:"Cualquier navegador. Ejecuta la app React descargada desde el gateway.",codigo:"frontend/src",puerto:"—",habla:"Solo con el gateway (puerto 8080)",datos:"sessionStorage: guarda el token de sesión mientras la pestaña está abierta"},
+  gateway:{x:20,y:100,w:710,h:56,t:"API Gateway · NGINX",s:"Única entrada · valida el JWT · enruta",tipo:"ext",
+    que:"Recibe todas las peticiones. Decide qué rutas son públicas (login, enlaces del correo) y cuáles exigen sesión. Antes de pasar una ruta protegida pregunta a autenticacion si el token es válido (auth_request).",
+    tec:"NGINX 1.27 con auth_request.",codigo:"gateway/nginx.conf",puerto:"8080 (público)",habla:"frontend, autenticacion, campanas, resultados",datos:"No guarda datos. Escribe el registro de accesos en JSON"},
+  mailpit:{x:750,y:100,w:170,h:56,t:"Mailpit",s:"Buzón de pruebas",tipo:"ext",
+    que:"Servidor SMTP falso. Recibe los correos simulados y los muestra en una bandeja web, así nunca se envía nada a personas reales.",
+    tec:"Imagen axllent/mailpit.",codigo:"docker-compose.yml",puerto:"1025 SMTP interno · 8025 bandeja web",habla:"Recibe de correos",datos:"Los correos recibidos (en memoria)"},
+  frontend:{x:20,y:220,w:170,h:84,t:"Frontend",s:"React + TypeScript",tipo:"ext",
+    que:"El panel del administrador (campañas, resultados en vivo, empleados) y las páginas públicas de capacitación. Se compila con Webpack 5 a archivos estáticos.",
+    tec:"React 18, TypeScript, Webpack 5, servido por un NGINX interno.",codigo:"frontend/",puerto:"80 (interno)",habla:"Solo responde al gateway; sus llamadas a /api salen del navegador",datos:"Ninguno"},
+  autenticacion:{x:206,y:220,w:170,h:84,t:"autenticacion",s:"Go · login y JWT",tipo:"go",
+    que:"Comprueba correo y contraseña (bcrypt), emite el JWT y responde al gateway si un token es válido (/validar).",
+    tec:"Go 1.22, net/http, golang-jwt, bcrypt, pgx.",codigo:"internal/autenticacion · cmd/autenticacion",puerto:"8081 (interno)",habla:"PostgreSQL (esquema autenticacion)",datos:"Tabla administradores"},
+  campanas:{x:392,y:220,w:170,h:84,t:"campanas",s:"Go · núcleo del negocio",tipo:"go",
+    que:"Crea campañas, gestiona empleados, registra clics y reportes y publica los eventos. Responde rápido porque delega el envío de correos.",
+    tec:"Go 1.22, net/http, pgx, amqp091-go. Patrón outbox.",codigo:"internal/campanas · cmd/campanas",puerto:"8082 (interno)",habla:"PostgreSQL (esquema campanas) y RabbitMQ (publica)",datos:"empleados, campanas, destinatarios, bandeja_salida"},
+  resultados:{x:578,y:220,w:170,h:84,t:"resultados",s:"Go · consumidor + API",tipo:"go",
+    que:"Escucha los eventos y construye su propia copia de los datos para el panel. También expone la API de solo lectura con estadísticas (separa quien escribe de quien lee: CQRS).",
+    tec:"Go 1.22, consumidor AMQP + servidor HTTP, pgx.",codigo:"internal/resultados · cmd/resultados",puerto:"8083 (interno)",habla:"RabbitMQ (consume) y PostgreSQL (esquema resultados)",datos:"campanas y destinatarios (modelo de lectura)"},
+  correos:{x:764,y:220,w:170,h:84,t:"correos",s:"Go · consumidor",tipo:"go",
+    que:"Escucha campana.creada, redacta un correo por destinatario con la plantilla elegida y lo entrega por SMTP. Luego publica correo.enviado.",
+    tec:"Go 1.22, net/smtp, html/template, amqp091-go.",codigo:"internal/correos · internal/plantillas · cmd/correos",puerto:"Ninguno (solo consume)",habla:"RabbitMQ y Mailpit (SMTP)",datos:"No tiene base de datos"},
+  rabbit:{x:392,y:380,w:542,h:52,t:"RabbitMQ · bus de eventos",s:"Exchange bulkphish.eventos (topic) · colas durables",tipo:"mq",
+    que:"Recibe cada evento y lo reparte a todas las colas interesadas. Si un consumidor está caído, los mensajes esperan. Los mensajes que fallan 3 veces van a la cola de mensajes muertos.",
+    tec:"RabbitMQ 3.13. Colas: correos.campana_creada y resultados.eventos.",codigo:"internal/mensajeria · internal/eventos",puerto:"5672 AMQP interno · 15672 panel",habla:"Publican: campanas y correos · consumen: correos y resultados",datos:"Mensajes en tránsito (persistentes)"},
+  postgres:{x:206,y:500,w:542,h:120,t:"PostgreSQL 16",s:"Una base, tres esquemas, tres roles",tipo:"bd",
+    que:"Una sola base de datos con un esquema y un rol por servicio. Cada servicio solo puede leer y escribir en su propio esquema.",
+    tec:"PostgreSQL 16. Se inicializa con bd/inicializar.sh.",codigo:"bd/",puerto:"5432 (interno)",habla:"autenticacion, campanas y resultados",datos:"Esquemas: autenticacion, campanas, resultados"}
+};
+const ARISTAS = {
+  nav_gw:{d:"M470 62 V100",l:"HTTP",lx:478,ly:84},
+  gw_fe:{d:"M105 156 V220",l:"/",lx:112,ly:192},
+  gw_au:{d:"M291 156 V220",l:"validar JWT",lx:298,ly:192},
+  gw_ca:{d:"M477 156 V220",l:"/api/campanas · /t · /r",lx:484,ly:192},
+  gw_re:{d:"M663 156 V220",l:"/api/resultados",lx:670,ly:192},
+  co_mp:{d:"M849 220 V156",l:"SMTP",lx:857,ly:190},
+  ca_mq:{d:"M447 304 V380",l:"publica",lx:402,ly:346},
+  mq_re:{d:"M633 380 V304",l:"consume",lx:575,ly:346},
+  mq_co:{d:"M819 380 V304",l:"consume",lx:762,ly:346},
+  co_mq:{d:"M879 304 V380",l:"correo.enviado",lx:886,ly:346},
+  au_bd:{d:"M326 304 V500",bd:1},
+  ca_bd:{d:"M512 304 V500",bd:1},
+  re_bd:{d:"M698 304 V500",bd:1}
+};
+const CHIPS=[{x:222,t:"autenticacion"},{x:386,t:"campanas"},{x:550,t:"resultados"}];
+
+/* ---------------- Pasos del flujo ---------------- */
+const PASOS = [
+ {tipo:"sync",t:"El administrador inicia sesión",nodos:["navegador","gateway","autenticacion","postgres"],aristas:["nav_gw","gw_au","au_bd"],
+  txt:"Envía correo y contraseña a POST /api/auth/login (ruta pública). autenticacion compara con el hash bcrypt guardado y responde con un JWT firmado que vence en 8 horas. El navegador lo guarda y lo enviará en cada petición.",msj:"POST /api/auth/login → { token, expira_en }"},
+ {tipo:"sync",t:"Crea una campaña",nodos:["navegador","gateway","autenticacion","campanas","postgres"],aristas:["nav_gw","gw_au","gw_ca","ca_bd"],
+  txt:"El panel llama a POST /api/campanas con el JWT. Antes de pasar, NGINX consulta a autenticacion (/validar). Si es válido, campanas guarda la campaña y un destinatario con token único por cada empleado elegido.",msj:"POST /api/campanas { nombre, plantilla_id, areas }"},
+ {tipo:"sync",t:"Se guarda el evento y se responde",nodos:["campanas","postgres"],aristas:["ca_bd"],
+  txt:"En la misma transacción se escribe el evento campana.creada en la tabla bandeja_salida (patrón outbox). Así, o se guarda todo o no se guarda nada. campanas responde 201 de inmediato: el administrador no espera el envío de correos.",msj:"INSERT bandeja_salida (campana.creada) + COMMIT → 201 Created"},
+ {tipo:"async",t:"Se publica campana.creada",nodos:["campanas","rabbit"],aristas:["ca_mq"],
+  txt:"Un proceso interno (el relevo) lee la bandeja cada segundo, publica en RabbitMQ y espera la confirmación antes de marcarlo como publicado. Desde aquí todo es en segundo plano.",msj:"publish bulkphish.eventos · campana.creada"},
+ {tipo:"async",t:"RabbitMQ reparte el evento",nodos:["rabbit","correos","resultados"],aristas:["mq_co","mq_re"],
+  txt:"El mismo evento se copia a dos colas: correos.campana_creada y resultados.eventos. Es el reparto a varios consumidores; campanas no sabe quiénes escuchan.",msj:"campana.creada → [correos] y [resultados]"},
+ {tipo:"async",t:"correos envía los correos simulados",nodos:["correos","mailpit","rabbit"],aristas:["co_mp","co_mq"],
+  txt:"Por cada destinatario arma el correo con la plantilla (enlace de clic y enlace de reporte con su token) y lo entrega por SMTP a Mailpit, hasta 5 a la vez. Tras cada envío publica correo.enviado.",msj:"SMTP → Mailpit · publish correo.enviado"},
+ {tipo:"async",t:"resultados prepara el modelo de lectura",nodos:["rabbit","resultados","postgres"],aristas:["mq_re","re_bd"],
+  txt:"Guarda la campaña y sus destinatarios en su propio esquema. Cada correo.enviado actualiza la fila correspondiente. Si un evento llega antes de tiempo, se reintenta.",msj:"campana.creada + correo.enviado → esquema resultados"},
+ {tipo:"sync",t:"El empleado hace clic en el correo",nodos:["navegador","gateway","campanas","postgres"],aristas:["nav_gw","gw_ca","ca_bd"],
+  txt:"El enlace /t/{token} es público (el empleado no tiene sesión). campanas marca el primer clic, escribe enlace.clicado en la bandeja de salida y redirige a la página de capacitación, donde la persona ve las señales de alerta. Si hace clic otra vez, no se duplica nada.",msj:"GET /t/{token} → 302 /capacitacion/{token}"},
+ {tipo:"async",t:"Se publica y registra el clic",nodos:["campanas","rabbit","resultados","postgres"],aristas:["ca_mq","mq_re","re_bd"],
+  txt:"El relevo publica enlace.clicado; resultados lo consume y guarda la hora del clic. El botón “Reportar phishing” del correo sigue el mismo camino con /r/{token} y el evento correo.reportado.",msj:"enlace.clicado → resultados"},
+ {tipo:"sync",t:"El panel muestra los resultados en vivo",nodos:["navegador","gateway","autenticacion","resultados","postgres"],aristas:["nav_gw","gw_au","gw_re","re_bd"],
+  txt:"Cada 3 segundos el panel consulta GET /api/resultados/campanas/{id} (con JWT). Es una lectura rápida sobre el modelo propio de resultados; por eso el mosaico “Quién hizo qué” cambia casi en tiempo real.",msj:"GET /api/resultados/campanas/{id} → estadísticas + destinatarios"}
+];
+
+/* ---------------- Dibujo ---------------- */
+const NS="http://www.w3.org/2000/svg";
+const el=(n,a={},h)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(h!==undefined)e.textContent=h;return e;};
+const gA=document.getElementById("aristas"),gN=document.getElementById("nodos");
+for(const id in ARISTAS){const a=ARISTAS[id];
+  const p=el("path",{d:a.d,class:"arista"+(a.bd?" bd":""),"marker-end":a.bd?"":"url(#flecha)","data-id":id});gA.appendChild(p);
+  if(a.l){gA.appendChild(el("text",{x:a.lx,y:a.ly,class:"etq","data-id":id},a.l));}}
+for(const id in NODOS){const n=NODOS[id];
+  const g=el("g",{class:"nodo "+n.tipo,tabindex:0,role:"button","aria-label":n.t+": "+n.s,"data-id":id});
+  g.appendChild(el("rect",{class:"caja",x:n.x,y:n.y,width:n.w,height:n.h,rx:10}));
+  const cx=n.x+n.w/2;
+  g.appendChild(el("text",{class:"t",x:cx,y:id==="postgres"?n.y+24:n.y+(n.h/2)-2,"text-anchor":"middle"},n.t));
+  g.appendChild(el("text",{class:"s",x:cx,y:id==="postgres"?n.y+42:n.y+(n.h/2)+16,"text-anchor":"middle"},n.s));
+  g.addEventListener("click",()=>elegir(id));
+  g.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();elegir(id);}});
+  gN.appendChild(g);}
+CHIPS.forEach(c=>{const g=el("g",{});g.appendChild(el("rect",{class:"chip",x:c.x,y:560,width:150,height:40,rx:8}));
+  g.appendChild(el("text",{class:"chipt",x:c.x+75,y:584,"text-anchor":"middle"},"esquema "+c.t));gN.appendChild(g);});
+
+/* ---------------- Interacción ---------------- */
+const panel=document.getElementById("panel");
+let modo="comp",sel="gateway",paso=0,reloj=null;
+const botComp=document.getElementById("modo-comp"),botFlujo=document.getElementById("modo-flujo");
+botComp.onclick=()=>poner("comp");botFlujo.onclick=()=>poner("flujo");
+function poner(m){modo=m;detener();botComp.setAttribute("aria-pressed",m==="comp");botFlujo.setAttribute("aria-pressed",m==="flujo");pintar();}
+function elegir(id){if(modo!=="comp")poner("comp");sel=id;pintar();}
+function limpiar(){document.querySelectorAll(".nodo").forEach(n=>n.classList.remove("sel","act","pasivo"));
+  document.querySelectorAll("#aristas [data-id]").forEach(n=>n.classList.remove("act","pasivo"));}
+function pintar(){limpiar();
+  if(modo==="comp"){document.querySelector('.nodo[data-id="'+sel+'"]').classList.add("sel");const n=NODOS[sel];
+    panel.innerHTML=`<h2>${n.t}</h2><p style="margin:0 0 12px;color:var(--suave)">${n.s}</p><p>${n.que}</p>
+    <h3>Ficha técnica</h3><dl><dt>Tecnología</dt><dd>${n.tec}</dd><dt>Dónde está</dt><dd><code>${n.codigo}</code></dd><dt>Puerto</dt><dd>${n.puerto}</dd><dt>Se comunica con</dt><dd>${n.habla}</dd><dt>Datos</dt><dd>${n.datos}</dd></dl>`;}
+  else{const p=PASOS[paso];
+    document.querySelectorAll(".nodo").forEach(n=>n.classList.add(p.nodos.includes(n.dataset.id)?"act":"pasivo"));
+    document.querySelectorAll("#aristas [data-id]").forEach(n=>n.classList.add(p.aristas.includes(n.dataset.id)?"act":"pasivo"));
+    panel.innerHTML=`<h2>Paso ${paso+1} de ${PASOS.length}</h2>
+    <div class="progreso">${PASOS.map((_,i)=>`<i class="${i<paso?"hecho":i===paso?"ahora":""}" data-i="${i}" title="Paso ${i+1}"></i>`).join("")}</div>
+    <p><span class="etiqueta ${p.tipo}">${p.tipo==="sync"?"Síncrono":"Asíncrono"}</span> <strong>${p.t}</strong></p><p>${p.txt}</p>
+    <div class="msj"><code>${p.msj}</code></div>
+    <div class="controles"><button class="btn" id="ant" ${paso===0?"disabled":""}>Anterior</button><button class="btn p" id="sig" ${paso===PASOS.length-1?"disabled":""}>Siguiente</button><button class="btn" id="auto">${reloj?"Pausar":"Reproducir"}</button></div>
+    <ul class="lista-pasos">${PASOS.map((q,i)=>`<li><button data-i="${i}" ${i===paso?'aria-current="step"':""}>${i+1}. ${q.t}</button></li>`).join("")}</ul>`;
+    panel.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>{detener();paso=+b.dataset.i;pintar();});
+    document.getElementById("ant").onclick=()=>{detener();paso--;pintar();};
+    document.getElementById("sig").onclick=()=>{detener();paso++;pintar();};
+    document.getElementById("auto").onclick=()=>{if(reloj){detener();pintar();}else{reloj=setInterval(()=>{if(paso<PASOS.length-1){paso++;pintar();}else{detener();pintar();}},3500);pintar();}};}}
+function detener(){if(reloj){clearInterval(reloj);reloj=null;}}
+pintar();
+</script>
+</body>
+</html>

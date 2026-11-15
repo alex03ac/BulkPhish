@@ -1,0 +1,7 @@
+.git
+.env
+.env.*
+!.env.ejemplo
+frontend/node_modules
+frontend/dist
+doc
