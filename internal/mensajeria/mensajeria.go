@@ -13,6 +13,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"bulkphish/internal/eventos"
+	"bulkphish/internal/metricas"
 )
 
 // Manejador procesa un evento. Si devuelve error, se reintenta y luego va a la cola de muertos.
@@ -114,6 +115,7 @@ func (c *Cliente) Publicar(ctx context.Context, clave string, sobre eventos.Sobr
 	if !aceptado {
 		return errors.New("RabbitMQ no confirmó el mensaje")
 	}
+	metricas.EventosPublicados.WithLabelValues(sobre.Tipo).Inc()
 	return nil
 }
 
@@ -175,6 +177,7 @@ func procesar(ctx context.Context, cola string, entrega amqp.Delivery, manejador
 	for intento := 1; intento <= 3; intento++ {
 		if err = manejador(ctx, sobre); err == nil {
 			_ = entrega.Ack(false)
+			metricas.EventosProcesados.WithLabelValues(cola, sobre.Tipo, "ok").Inc()
 			return
 		}
 		slog.Warn("fallo al procesar evento", "cola", cola, "tipo", sobre.Tipo, "intento", intento, "error", err)
@@ -187,5 +190,6 @@ func procesar(ctx context.Context, cola string, entrega amqp.Delivery, manejador
 		espera *= 2
 	}
 	slog.Error("evento enviado a la cola de mensajes muertos", "cola", cola, "tipo", sobre.Tipo, "id", sobre.ID, "error", err)
+	metricas.EventosProcesados.WithLabelValues(cola, sobre.Tipo, "muerto").Inc()
 	_ = entrega.Nack(false, false)
 }

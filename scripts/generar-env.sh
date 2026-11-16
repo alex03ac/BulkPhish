@@ -33,6 +33,8 @@ CLAVE_BD_CAMPANAS=$(aleatorio 24)
 CLAVE_BD_RESULTADOS=$(aleatorio 24)
 RABBIT_USUARIO=bulkphish
 RABBIT_CLAVE=$(aleatorio 24)
+GRAFANA_USUARIO=admin
+GRAFANA_CLAVE=$(aleatorio 24)
 BIND_GATEWAY=127.0.0.1
 URL_PUBLICA=http://localhost:8080
 ENV
