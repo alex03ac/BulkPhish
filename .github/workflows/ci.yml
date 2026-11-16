@@ -1,0 +1,76 @@
+name: CI
+
+# Se ejecuta en cada push a main y en cada Pull Request.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend · Go
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"          # el proyecto es Go puro; binarios estáticos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Formato (gofmt)
+        run: |
+          sin_formato=$(gofmt -l .)
+          if [ -n "$sin_formato" ]; then
+            echo "Hay archivos Go sin formatear:"; echo "$sin_formato"; exit 1
+          fi
+      - name: Análisis estático (go vet)
+        run: go vet ./...
+      - name: Pruebas unitarias
+        run: go test ./...
+
+  frontend:
+    name: Frontend · tipos y build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Chequeo de tipos (tsc)
+        run: npm run tipos
+      - name: Build de producción
+        run: npm run build
+
+  imagenes:
+    name: Imagen · ${{ matrix.servicio }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        servicio: [autenticacion, campanas, correos, resultados]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imagen del servicio
+        run: docker build -f Dockerfile.servicio --build-arg SERVICIO=${{ matrix.servicio }} -t bulkphish-${{ matrix.servicio }}:ci .
+
+  imagen-frontend:
+    name: Imagen · frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imagen del frontend
+        run: docker build -t bulkphish-frontend:ci ./frontend
+
+  secretos:
+    name: Revisión de secretos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Buscar secretos en el repositorio
+        run: bash scripts/revisar-secretos.sh
