@@ -9,8 +9,11 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
+
+	"bulkphish/internal/metricas"
 )
 
 // JSON responde con un objeto en formato JSON.
@@ -94,9 +97,13 @@ func Middleware(siguiente http.Handler) http.Handler {
 				slog.Error("pánico en el manejador", "error", fallo, "pila", string(debug.Stack()))
 				Error(rec, http.StatusInternalServerError, "error interno del servidor")
 			}
-			if r.URL.Path != "/salud" { // no llenar los logs con el healthcheck
-				slog.Info("petición", "metodo", r.Method, "ruta", rutaSegura(r.URL.Path), "estado", rec.estado,
-					"duracion_ms", time.Since(inicio).Milliseconds(), "id_peticion", r.Header.Get("X-Request-Id"))
+			if r.URL.Path != "/salud" { // no llenar los logs ni las métricas con el healthcheck
+				ruta := rutaSegura(r.URL.Path)
+				duracion := time.Since(inicio)
+				slog.Info("petición", "metodo", r.Method, "ruta", ruta, "estado", rec.estado,
+					"duracion_ms", duracion.Milliseconds(), "id_peticion", r.Header.Get("X-Request-Id"))
+				metricas.PeticionesHTTP.WithLabelValues(r.Method, ruta, strconv.Itoa(rec.estado)).Inc()
+				metricas.DuracionHTTP.WithLabelValues(r.Method, ruta).Observe(duracion.Seconds())
 			}
 		}()
 		siguiente.ServeHTTP(rec, r)
@@ -105,9 +112,13 @@ func Middleware(siguiente http.Handler) http.Handler {
 
 // Servir levanta el servidor HTTP y lo apaga de forma ordenada cuando el contexto termina.
 func Servir(ctx context.Context, puerto string, manejador http.Handler) error {
+	// /metrics se sirve aparte (sin el middleware) para no registrar ni contar las recolecciones de Prometheus.
+	raiz := http.NewServeMux()
+	raiz.Handle("/metrics", metricas.Manejador())
+	raiz.Handle("/", Middleware(manejador))
 	servidor := &http.Server{
 		Addr:              ":" + puerto,
-		Handler:           Middleware(manejador),
+		Handler:           raiz,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
