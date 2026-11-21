@@ -1,0 +1,28 @@
+# Configuración de Prometheus: recolecta /metrics de cada servicio Go y de RabbitMQ.
+# Todos los objetivos viven en la red interna de Docker; Prometheus los alcanza por su nombre.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: autenticacion
+    static_configs:
+      - targets: ["autenticacion:8081"]
+  - job_name: campanas
+    static_configs:
+      - targets: ["campanas:8082"]
+  - job_name: resultados
+    static_configs:
+      - targets: ["resultados:8083"]
+  - job_name: correos
+    static_configs:
+      - targets: ["correos:8084"]
+  # RabbitMQ 3.13-management trae el plugin rabbitmq_prometheus activado en el puerto 15692.
+  - job_name: rabbitmq
+    static_configs:
+      - targets: ["rabbitmq:15692"]
+  # Métricas por objeto (una serie por cola): necesarias para ver el tamaño de cada cola.
+  - job_name: rabbitmq_colas
+    metrics_path: /metrics/per-object
+    static_configs:
+      - targets: ["rabbitmq:15692"]
