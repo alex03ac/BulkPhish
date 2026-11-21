@@ -34,7 +34,7 @@ CLAVE_BD_RESULTADOS=$(aleatorio 24)
 RABBIT_USUARIO=bulkphish
 RABBIT_CLAVE=$(aleatorio 24)
 BIND_GATEWAY=127.0.0.1
-URL_PUBLICA=http://localhost:8080
+URL_PUBLICA=https://localhost:8443
 ENV
 chmod 600 .env
 

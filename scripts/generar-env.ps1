@@ -35,7 +35,7 @@ CLAVE_BD_RESULTADOS=$(Aleatorio 24)
 RABBIT_USUARIO=bulkphish
 RABBIT_CLAVE=$(Aleatorio 24)
 BIND_GATEWAY=127.0.0.1
-URL_PUBLICA=http://localhost:8080
+URL_PUBLICA=https://localhost:8443
 "@
 # UTF-8 sin BOM y con saltos de línea LF, como espera Docker Compose
 [System.IO.File]::WriteAllText((Join-Path (Get-Location) '.env'), ($contenido -replace "`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
