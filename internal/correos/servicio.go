@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"mime"
+	"net/http"
 	"net/smtp"
 	"os"
 	"os/signal"
@@ -21,7 +22,9 @@ import (
 	"bulkphish/internal/config"
 	"bulkphish/internal/eventos"
 	"bulkphish/internal/mensajeria"
+	"bulkphish/internal/metricas"
 	"bulkphish/internal/plantillas"
+	"bulkphish/internal/web"
 )
 
 type servicio struct {
@@ -49,7 +52,25 @@ func Ejecutar() error {
 		direccion:  config.Texto("SMTP_HOST", "mailpit") + ":" + config.Texto("SMTP_PUERTO", "1025"),
 		urlPublica: strings.TrimRight(config.Texto("URL_PUBLICA", "http://localhost:8080"), "/"),
 	}
-	return mq.Consumir(ctx, colaCorreos, []string{eventos.CampanaCreada}, s.manejarCampana)
+
+	// correos no atiende peticiones de usuarios, pero levanta un servidor mínimo
+	// para exponer /metrics (y /salud) y que Prometheus pueda recolectarlo.
+	ctxInterno, cancelar := context.WithCancel(ctx)
+	defer cancelar()
+	errores := make(chan error, 2)
+	go func() {
+		errores <- mq.Consumir(ctxInterno, colaCorreos, []string{eventos.CampanaCreada}, s.manejarCampana)
+	}()
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /salud", web.Salud)
+		errores <- web.Servir(ctxInterno, config.Texto("PUERTO", "8084"), mux)
+	}()
+
+	err = <-errores // el primero que termine determina el resultado
+	cancelar()
+	<-errores
+	return err
 }
 
 // manejarCampana envía los correos de una campaña con hasta 5 envíos en paralelo.
@@ -81,6 +102,7 @@ func (s *servicio) manejarCampana(ctx context.Context, sobre eventos.Sobre) erro
 				slog.Error("no se pudo enviar el correo", "destinatario_id", d.DestinatarioID, "error", err)
 				return
 			}
+			metricas.CorreosEnviados.Inc()
 			evento, err := eventos.NuevoSobre(eventos.CorreoEnviado, eventos.DatosCorreoEnviado{
 				CampanaID: datos.CampanaID, DestinatarioID: d.DestinatarioID, EnviadoEn: time.Now().UTC(),
 			})
